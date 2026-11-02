@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Milky Way Simulation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh; padding: 48px 20px;
+            background: radial-gradient(ellipse at top, #141a2e 0%, #05060c 70%);
+            color: #e6e8f0; font-family: system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif;
+        }
+        h1 { text-align: center; font-size: 28px; font-weight: 600; letter-spacing: 0.02em; }
+        .sub { text-align: center; color: #9aa0b4; margin: 10px 0 36px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; max-width: 1100px; margin: 0 auto; }
+        .card {
+            display: block; text-decoration: none; color: inherit; border-radius: 14px; overflow: hidden;
+            background: #10131f; border: 1px solid #262b40; transition: transform 0.2s, border-color 0.2s;
+        }
+        .card:hover { transform: translateY(-4px); border-color: #5b6aa8; }
+        .card img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; background: #000; }
+        .body { padding: 18px 20px 22px; }
+        .tag { font-size: 12px; color: #8fa3ff; letter-spacing: 0.06em; }
+        h2 { font-size: 20px; margin: 4px 0 10px; }
+        ul { padding-left: 18px; color: #b5bacb; line-height: 1.7; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <h1>Milky Way Simulation</h1>
+    <p class="sub">보고 싶은 은하 버전을 선택하세요.</p>
+    <div class="grid">
+        <a class="card" href="classic.html">
+            <img src="thumbs/classic.png" alt="Classic 버전 은하">
+            <div class="body">
+                <div class="tag">VERSION 1</div>
+                <h2>Classic — 밀도파 밝기</h2>
+                <ul>
+                    <li>별 12만 개, 3개의 나선팔</li>
+                    <li>팔 위를 지나는 별이 밝고 푸르게 빛남</li>
+                    <li>시간이 지나면 중심부에 감긴 고리가 생김</li>
+                </ul>
+            </div>
+        </a>
+        <a class="card" href="grand.html">
+            <img src="thumbs/grand.png" alt="Grand 버전 은하">
+            <div class="body">
+                <div class="tag">VERSION 2</div>
+                <h2>Grand — 로그나선 + 성운</h2>
+                <ul>
+                    <li>별 40만 개 (최대 100만 개), 배경 별</li>
+                    <li>로그나선 팔 + 궤도 밀집, 불규칙한 가장자리와 별 무리</li>
+                    <li>청백·연분홍 성운, 먼지대, 은하핵 광채, 자동 회전</li>
+                </ul>
+            </div>
+        </a>
+    </div>
+</body>
+</html>

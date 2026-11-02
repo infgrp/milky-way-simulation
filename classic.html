@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Milky Way Simulation — Classic</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; overflow: hidden; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        .back { position: fixed; top: 12px; left: 12px; z-index: 10; padding: 6px 12px; border-radius: 6px;
+                background: rgba(30, 30, 40, 0.75); color: #dde; font: 13px system-ui, sans-serif; text-decoration: none; }
+        .back:hover { background: rgba(60, 60, 80, 0.9); }
+    </style>
+    <!-- 라이브러리 CDN 매핑 -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+            "lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm"
+        }
+    }
+    </script>
+</head>
+<body>
+    <a class="back" href="index.html">← 버전 선택</a>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import GUI from 'lil-gui';
+
+        // 1. 씬, 카메라, 렌더러 초기화
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 35, 55);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // 2. 파티클 은하 생성
+        // 별 분포: 중심 팽대부(bulge) + 나선팔 + 팔 사이 원반(disk)
+        const parameters = {
+            count: 120000,
+            radius: 35,
+            branches: 3,          // 나선팔 개수
+            spin: 0.15,           // 나선이 감기는 정도 (작을수록 느슨하게 펼쳐짐)
+            randomness: 0.2,      // 나선팔 기준선에서 벗어나는 정도
+            randomnessPower: 3,   // 클수록 별이 팔 중심선에 몰림
+            bulgeRatio: 0.12,     // 팽대부 별 비율
+            armRatio: 0.58        // 나선팔 별 비율 (나머지는 원반에 고르게 분포)
+        };
+
+        const colorInside = new THREE.Color('#ffae66'); // 중심부 (주황빛 오래된 별)
+        const colorOutside = new THREE.Color('#5599ff'); // 외곽부 (푸른빛 젊은 별)
+
+        const randomSign = () => (Math.random() < 0.5 ? 1 : -1);
+        const scatter = (scale) =>
+            Math.pow(Math.random(), parameters.randomnessPower) * randomSign() * parameters.randomness * scale;
+
+        function buildGeometry() {
+            const { count, radius: R, branches, spin } = parameters;
+            const positions = new Float32Array(count * 3);
+            const radii = new Float32Array(count);
+            const colors = new Float32Array(count * 3);
+            const brightness = new Float32Array(count);
+
+            const bulgeCount = Math.floor(count * parameters.bulgeRatio);
+            const armCount = Math.floor(count * parameters.armRatio);
+            const mixedColor = new THREE.Color();
+
+            for (let i = 0; i < count; i++) {
+                const i3 = i * 3;
+                let x, y, z;
+
+                if (i < bulgeCount) {
+                    // 팽대부: 중심에 몰린 납작한 구형 분포
+                    const r = Math.pow(Math.random(), 2) * 5;
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = Math.acos(2 * Math.random() - 1);
+                    x = r * Math.sin(phi) * Math.cos(theta);
+                    y = r * Math.cos(phi) * 0.6;
+                    z = r * Math.sin(phi) * Math.sin(theta);
+                } else if (i < bulgeCount + armCount) {
+                    // 나선팔: 회전 방향 뒤로 감기는(trailing) 로그나선 근사
+                    const r = Math.random() * R;
+                    const branchAngle = ((i % branches) / branches) * Math.PI * 2;
+                    const angle = branchAngle - r * spin;
+                    x = Math.cos(angle) * r + scatter(r);
+                    y = scatter(r * 0.2);
+                    z = Math.sin(angle) * r + scatter(r);
+                } else {
+                    // 팔 사이 원반: 각도 균일 분포
+                    const r = Math.sqrt(Math.random()) * R;
+                    const angle = Math.random() * Math.PI * 2;
+                    x = Math.cos(angle) * r;
+                    y = scatter(r * 0.2);
+                    z = Math.sin(angle) * r;
+                }
+
+                positions[i3] = x;
+                positions[i3 + 1] = y;
+                positions[i3 + 2] = z;
+
+                const planarRadius = Math.hypot(x, z);
+                radii[i] = planarRadius;
+                brightness[i] = 0.55 + Math.random() * 0.45;
+
+                mixedColor.copy(colorInside).lerp(colorOutside, Math.min(planarRadius / R, 1));
+                colors[i3] = mixedColor.r;
+                colors[i3 + 1] = mixedColor.g;
+                colors[i3 + 2] = mixedColor.b;
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('aRadius', new THREE.BufferAttribute(radii, 1));
+            geometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute('aBrightness', new THREE.BufferAttribute(brightness, 1));
+            return geometry;
+        }
+
+        // 3. 커스텀 셰이더 머티리얼
+        // 별은 반지름마다 다른 속도로 돌기 때문에(차등 회전) 처음 배치한 팔은 시간이 지나면 감겨서 사라진다.
+        // 실제 은하처럼 '밀도파' 패턴이 강체처럼 천천히 돌고, 그 패턴을 지나는 별이 밝고 푸르게 빛나도록 한다.
+        const material = new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: { value: 0 },
+                uDarkMatter: { value: 1.0 },
+                uCinematicMode: { value: 0.0 },
+                uBranches: { value: parameters.branches },
+                uSpin: { value: parameters.spin },
+                uPatternSpeed: { value: 0.06 },
+                uArmContrast: { value: 0.8 },
+                uArmSharpness: { value: 4.0 }
+            },
+            vertexShader: `
+                uniform float uTime;
+                uniform float uDarkMatter;
+                uniform float uBranches;
+                uniform float uSpin;
+                uniform float uPatternSpeed;
+                uniform float uArmContrast;
+                uniform float uArmSharpness;
+                attribute float aRadius;
+                attribute float aBrightness;
+                attribute vec3 aColor;
+                varying vec3 vColor;
+
+                void main() {
+                    float r = max(aRadius, 0.2);
+
+                    // 케플러 법칙(1/√r) vs 평탄 회전(상수 속도)
+                    float keplerVelocity = 12.0 / sqrt(r);
+                    float flatVelocity = 4.0;
+                    float currentVelocity = mix(keplerVelocity, flatVelocity, uDarkMatter);
+                    float angularVelocity = currentVelocity / r;
+
+                    float angle = uTime * angularVelocity;
+                    float c = cos(angle);
+                    float s = sin(angle);
+
+                    vec3 pos = position;
+                    pos.x = position.x * c - position.z * s;
+                    pos.z = position.x * s + position.z * c;
+
+                    // 밀도파: 강체 회전하는 나선 패턴 위에 있는지 계산 (1 = 팔 중심, 0 = 팔 사이)
+                    float theta = atan(pos.z, pos.x);
+                    float phase = uBranches * (theta + uSpin * r - uPatternSpeed * uTime);
+                    float arm = pow(0.5 + 0.5 * cos(phase), uArmSharpness);
+                    float armMask = smoothstep(2.0, 6.0, r) * uArmContrast; // 팽대부에는 적용 안 함
+
+                    // 팔 안: 밝고 푸른 젊은 별 / 팔 사이: 어둡고 붉은 늙은 별
+                    vec3 youngColor = vec3(0.65, 0.8, 1.0);
+                    vec3 color = mix(aColor, youngColor, arm * 0.6 * armMask);
+                    float glow = mix(1.0, mix(0.25, 1.6, arm), armMask);
+                    vColor = color * glow * aBrightness;
+
+                    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                    float sizeScale = mix(1.0, mix(0.8, 1.5, arm), armMask);
+                    gl_PointSize = (22.0 * sizeScale / -mvPosition.z);
+                    gl_Position = projectionMatrix * mvPosition;
+                }
+            `,
+            fragmentShader: `
+                uniform float uCinematicMode;
+                varying vec3 vColor;
+
+                void main() {
+                    vec2 pt = gl_PointCoord - vec2(0.5);
+                    float dist = length(pt);
+                    if(dist > 0.5) discard;
+
+                    float strength = pow(1.0 - (dist * 2.0), 1.6);
+                    float intensity = mix(1.0, 2.5, uCinematicMode);
+                    gl_FragColor = vec4(vColor * strength * intensity, 1.0);
+                }
+            `,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
+        const galaxy = new THREE.Points(buildGeometry(), material);
+        scene.add(galaxy);
+
+        const clock = new THREE.Clock();
+
+        // 팔 개수·감김 정도를 바꾸면 별 배치를 새로 만들고 시간을 0으로 되돌린다
+        function regenerate() {
+            galaxy.geometry.dispose();
+            galaxy.geometry = buildGeometry();
+            material.uniforms.uBranches.value = parameters.branches;
+            material.uniforms.uSpin.value = parameters.spin;
+            clock.start();
+        }
+
+        // 4. 후처리(Bloom Pass)
+        const renderScene = new RenderPass(scene, camera);
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            0.0, 0.4, 0.1
+        );
+
+        const composer = new EffectComposer(renderer);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+
+        // 5. GUI 컨트롤러
+        const gui = new GUI({ title: 'Milky Way Control' });
+        const params = { darkMatter: 1.0, cinematicMode: false };
+
+        gui.add(params, 'darkMatter', 0, 1, 0.01)
+            .name('Dark Matter Factor')
+            .onChange(v => { material.uniforms.uDarkMatter.value = v; });
+
+        gui.add(params, 'cinematicMode')
+            .name('Cinematic Glow')
+            .onChange(v => {
+                material.uniforms.uCinematicMode.value = v ? 1.0 : 0.0;
+                bloomPass.strength = v ? 1.4 : 0.0;
+            });
+
+        const armFolder = gui.addFolder('Spiral Arms');
+        armFolder.add(parameters, 'branches', 2, 6, 1).name('Arm Count').onFinishChange(regenerate);
+        armFolder.add(parameters, 'spin', 0.05, 0.4, 0.01).name('Arm Winding').onFinishChange(regenerate);
+        armFolder.add(material.uniforms.uArmContrast, 'value', 0, 1, 0.01).name('Arm Contrast');
+        armFolder.add(material.uniforms.uArmSharpness, 'value', 1, 12, 0.5).name('Arm Sharpness');
+        armFolder.add(material.uniforms.uPatternSpeed, 'value', 0, 0.3, 0.01).name('Pattern Speed');
+
+        // 6. 창 크기 반응형 처리
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // 7. 애니메이션 루프
+        function animate() {
+            requestAnimationFrame(animate);
+            material.uniforms.uTime.value = clock.getElapsedTime();
+            controls.update();
+            composer.render();
+        }
+        animate();
+    </script>
+</body>
+</html>
